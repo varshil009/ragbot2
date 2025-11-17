@@ -1,7 +1,4 @@
 numpy
-Pillow
-transformers
-torch
 PyMuPDF
 pdfplumber
 qdrant-client
