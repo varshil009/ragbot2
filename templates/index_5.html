@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAGBOT</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="chat-column">
+            <h1>RAGBOT</h1>
+            <div id="book-selection">
+                <p>Please select a book to start chatting.</p>
+                <select id="book-select">
+                    <option value="deep learning with python">Deep Learning with Python</option>
+                    <option value="python data science handbook">Python Data Science Handbook</option>
+                </select>
+                <button onclick="selectBook()">Select Book</button>
+            </div>
+            <div id="processing-message" style="display: none;">
+                <p>Loading book...</p>
+            </div>
+            <div id="chat-interface" style="display: none;">
+                <div id="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="question-input" placeholder="Ask a question...">
+                    <button onclick="askQuestion()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

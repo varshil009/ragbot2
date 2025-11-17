@@ -1,0 +1,12 @@
+numpy
+Pillow
+transformers
+torch
+PyMuPDF
+pdfplumber
+qdrant-client
+langchain-core
+langchain-community
+google-genai
+flask
+flask-session
