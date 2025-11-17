@@ -10,3 +10,5 @@ langchain-community
 google-genai
 flask
 flask-session
+flask-cors
+gunicorn
