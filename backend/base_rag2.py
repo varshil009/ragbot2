@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 import io
 
+import voyageai
 # for tokenizers and reading pdf
 from transformers import AutoTokenizer, AutoModel
 import torch
@@ -18,7 +19,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 import pickle
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.retrievers import BM25Retriever
+#from langchain_community.retrievers import BM25Retriever
 from langchain_core.language_models.llms import LLM as LangChainLLM
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage
@@ -260,59 +261,24 @@ class pdf_processing:
 
 
 
-class embedd:
+class Embedd:
     def __init__(self):
-        self.model_name = "microsoft/codebert-base"
-        #model_path = r"C:\Users\Varshil\.cache\huggingface\hub\models--sentence-transformers--all-MiniLM-L6-v2"
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModel.from_pretrained(self.model_name)
-        print("==> model ready to work")
+        self.client = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
+        self.model_name = "voyage-3-lite"    # recommended for RAG
+        print("==> Voyage embedding model ready")
 
     def generate_embeddings(self, chunks):
-        embeddings = []
-        print("==> started processing the chunks")
-        for chunk in chunks:
-            inputs = self.tokenizer(chunk, return_tensors = 'pt', truncation = True, padding = True)
-            #print("inputs : ", inputs)
-            """
-            The tokenizer processes the text chunk and converts it into a format suitable for the model.
-            # args...
-
-            return_tensors='pt': This argument specifies that the output should be in PyTorch tensor format, which is required for the model.
-            truncation=True: This ensures that any input longer than the model's maximum length is truncated, preventing errors during processing.
-            padding=True: This ensures that shorter inputs are padded to the same length, allowing for batch processing.
-
-            # keys that are returned and which will be used as arg to model:
-            input_ids : list of token ids of all tokenised words
-            attention_mask : binary mask indicating which tokes are to be attended by the model
-            token_type_ids :  It indicates which tokens belong to which segment, if all tokens belong to a single segment then [0,0,0,0]
-            overflowing_tokens : This key contains any tokens that were truncated when the input exceeded the maximum length allowed by the model.
-            num_truncated_tokens : number of truncated tokesm
-            """
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                """
-                No Gradient Calculation: The with torch.no_grad(): context manager is used to disable gradient calculations. This is important during inference to save memory
-                and speed up computations since we don't need gradients for backpropagation.
-                Model Output: The model processes the tokenized inputs and returns the outputs, which include various hidden states.
-                The **inputs syntax unpacks the dictionary of input tensors into keyword arguments(as described earlier) for the model.
-                """
-
-                k = outputs.last_hidden_state
-                #print("meaned last hidden layer : ", k.shape) # prints mean of all multidimensional layers
-                embeddings.append(k.mean(dim=1).squeeze().numpy())
-                # last hidden state is output of last layer
-                """
-                Extracting Last Hidden State:
-                outputs.last_hidden_state contains the hidden states for all tokens in the input sequence. This is a tensor of shape (batch_size, sequence_length, hidden_size).
-                Mean Calculation:
-                mean(dim=1) computes the mean of the hidden states across all tokens in the sequence, effectively creating a single embedding for the entire input chunk.
-                This is done to obtain a fixed-size vector representation for each chunk.
-                Squeeze and Convert to NumPy:
-                    """
-        print("==> finished processing the chunks")
-    
-        return np.array(embeddings)
+        """
+        chunks: list of text passages
+        returns: numpy array of embeddings
+        """
+        print("==> generating embeddings with Voyage...")
+        response = self.client.embed(
+            model=self.model_name,
+            input=chunks
+        )
+        # Voyage returns list of lists (float vectors)
+        return np.array(response.embeddings)
 
     @staticmethod
     def cosine_similarity_numpy(v1, v2):
@@ -322,23 +288,28 @@ class embedd:
         return dot_product / (norm_v1[:, np.newaxis] * norm_v2)
 
     def search(self, query, embeddings, chunks, chunk_page):
+        # Embed the query
         query_embedding = self.generate_embeddings([query])[0]
-        similarities = self.cosine_similarity_numpy(np.array([query_embedding]), embeddings)
-        best_match_index = similarities.argsort()[0, ::-1]
-        ref = [chunks[best_match_index[x]] for x in range(5)]
-        print(ref)
-        page_nums = [chunk_page[x] for x in ref]
-        print(page_nums)
+
+        # Compute similarity
+        similarities = self.cosine_similarity_numpy(
+            np.array([query_embedding]), embeddings
+        )
+
+        best_match_index = similarities.argsort()[0][::-1]
+
+        ref = [chunks[i] for i in best_match_index[:5]]
+
         page_nums = []
         for text in ref:
-            l = chunk_page[text]
-            if type(l) == int:
-                page_nums.extend([l])
+            pages = chunk_page[text]
+            if isinstance(pages, int):
+                page_nums.append(pages)
             else:
-                page_nums.extend(l)
-
+                page_nums.extend(pages)
 
         return "\n".join(ref), page_nums
+
 
     def fetch_image(self, query, cap_embeddings, cap_img):
         print("==> fetching image")
